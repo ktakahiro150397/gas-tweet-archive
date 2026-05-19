@@ -1,0 +1,48 @@
+name: Deploy GAS (clasp push)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'appsscript.json'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript コンパイル
+        run: npm run build
+
+      - name: HTMLファイルを dist/ にコピー
+        run: |
+          cp -r src/pages/*.html dist/ 2>/dev/null || true
+          cp appsscript.json dist/
+
+      - name: clasp push
+        uses: google/clasp-action@v4
+        with:
+          access_token: ${{ secrets.CLASP_ACCESS_TOKEN }}
+          id_token: ${{ secrets.CLASP_ID_TOKEN }}
+          script_id: ${{ secrets.CLASP_SCRIPT_ID }}
+          command: push
+
+      - name: GAS デプロイ（バージョン作成）
+        uses: google/clasp-action@v4
+        with:
+          access_token: ${{ secrets.CLASP_ACCESS_TOKEN }}
+          id_token: ${{ secrets.CLASP_ID_TOKEN }}
+          script_id: ${{ secrets.CLASP_SCRIPT_ID }}
+          command: deploy --description "Auto-deploy from GitHub"
