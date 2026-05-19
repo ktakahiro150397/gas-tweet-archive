@@ -31,8 +31,7 @@ X(Twitter) のデータアーカイブ（tweet.js / bookmark.js）を Google ス
 ```
 npm install        # 依存関係インストール
 npm test           # テスト実行
-npm run build      # TypeScript コンパイル
-npm run deploy     # GAS にデプロイ
+npm run build      # TypeScript コンパイル + HTML/マニフェスト配備
 ```
 
 ## ライセンス

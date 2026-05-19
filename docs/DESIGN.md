@@ -11,7 +11,7 @@ X(Twitter) のデータアーカイブ（tweet.js / bookmark.js）を Google ス
 | 言語 | TypeScript |
 | 実行環境 | Google Apps Script (GAS) |
 | テスト | Jest + ts-jest |
-| デプロイ | Glasp (Google Apps Script CLI) |
+| デプロイ | clasp (Google Apps Script CLI) |
 | ドキュメント | GitHub Pages |
 
 ## アーキテクチャ
@@ -23,13 +23,16 @@ User's PC                    Google Cloud                   User's Browser
 │ (zip)    │   HTML Dialog  │  ├─ 📊 DASHBOARD │<──────────│ (Graphs)  │
 └─────────┘                 │  ├─ 📋 TWEETS    │           └───────────┘
                             │  ├─ 🔖 BOOKMARKS │
+                            │  ├─ 🏷️ CATEGORIES│
                             │  ├─ 🔲 _CACHE    │
+                            │  ├─ 🔲 _CHART_DATA│
                             │  └─ ⚙️ SETTINGS  │
                             │                  │
                             │ Google Apps Script│
-                            │  ├─ onOpen()     │
-                            │  ├─ import.ts   │
-                            │  └─ dashboard.ts│
+                            │  ├─ main.ts     │  ← エントリポイント / メニュー / 集計
+                            │  ├─ import.ts   │  ← tweet.js/bookmark.js パース
+                            │  ├─ charts.ts   │  ← グラフ作成 / ヒートマップ
+                            │  └─ dashboard.ts│  ← 型定義のみ
                             └──────────────────┘
 ```
 
@@ -42,8 +45,8 @@ User's PC                    Google Cloud                   User's Browser
 - トップいいねランキング（横棒グラフ）
 - ブックマークカテゴリ（ドーナツグラフ）
 - 曜日アクティビティ（縦棒グラフ）
+- 時間帯アクティビティ（面グラフ）
 - 時間帯ヒートマップ（条件付き書式）
-- よく絡んだ人 Top3（横棒グラフ）
 
 ### 📋 TWEETS（生データ）
 - 11列のテーブル: 日付, 時刻, 本文, 種別, いいね, RT, リプ, 媒体, URL, 画像有無, 週番号
@@ -54,9 +57,18 @@ User's PC                    Google Cloud                   User's Browser
 - 9列: 保存日, 著者, 内容, ♡, URL, カテゴリ, 重要度, ステータス, メモ
 - カテゴリ・重要度・ステータスはプルダウン（データバリデーション）
 
+### 🏷️ CATEGORIES（カテゴリ管理）
+- ブックマークのカテゴリ一覧。ブックマーク初回インポート時に自動作成。
+- 自由に追加・編集可能。プルダウンに自動反映。
+
 ### 🔲 _CACHE（キャッシュ：非表示）
 - プリコンピュート方式: GASがインポート時に一括計算
 - DASHBOARDは_CACHEの値をSUM参照するだけ
+
+### 🔲 _CHART_DATA（グラフ中間データ：非表示）
+- グラフ作成時に各グラフの元データを書き込む専用シート
+- setupDashboardCharts() を実行するたびに全データを再書き込み
+- 条件付き書式で時間帯ヒートマップ効果を提供
 
 ## プリコンピュート方式
 
@@ -86,14 +98,21 @@ User's PC                    Google Cloud                   User's Browser
 └──────┬──────┘
        ▼
 ┌──────────────────┐
-│ GAS: import.ts    │ → JSON.parse() してバッチ分割
-│ processFile()     │ → writeToSheet() でシートに書き込み
-└──────┬───────────┘        └→ toast() でプログレス表示
+│ GAS: import.ts    │ → JSON.parse() してパース
+│ parseTweetJs()    │ → バリデーション・型変換
+│ parseBookmarkJs() │
+└──────┬───────────┘
        ▼
 ┌──────────────────┐
-│ GAS: dashboard.ts │ → TWEETSからデータ読み込み
-│ refreshDashboard()│ → computeCache() で集計
-└──────┬───────────┘   → _CACHEに書き込み
+│ GAS: main.ts      │ → データをシートにバッチ書き込み
+│ writeRowsToSheet()│ → CHUNK_SIZE(1,000行)ずつ flush
+│ applySheetFormat  │ → 書式設定・プルダウン
+└──────┬───────────┘
+       ▼
+┌──────────────────┐
+│ GAS: main.ts      │ → TWEETS/BOOKMARKSからデータ読み込み
+│ refreshDashboard()│ → 各種集計（月別/種別/曜日/時間帯/Topいいね）
+└──────┬───────────┘   → _CACHEにkey-value形式で書き込み
        ▼
 ┌─────────────┐
 │ 完了 Toast    │ "✅ 完了！ N件をインポートしました"
@@ -108,23 +127,24 @@ gas-tweet-archive/
 │   └── deploy-pages.yml      # GitHub Pages 自動デプロイ
 ├── src/
 │   ├── gas/
-│   │   ├── main.ts           # GASエントリポイント / メニュー処理
+│   │   ├── main.ts           # GASエントリポイント / メニュー / ダッシュボード集計
 │   │   ├── import.ts         # tweet.js/bookmark.js パース
-│   │   └── dashboard.ts      # キャッシュ計算・集計ロジック
+│   │   ├── charts.ts         # グラフ作成 / 時間帯ヒートマップ
+│   │   └── dashboard.ts      # 型定義のみ
 │   ├── pages/                 # GAS HTML Service 用テンプレート
 │   │   ├── dialog.html       # アップロードダイアログ
 │   │   └── guide.html        # 使い方ガイドサイドバー
 │   └── types/
-│       └── index.ts          # 型定義
+│       └── index.ts          # 型再エクスポート
 ├── tests/
-│   ├── import.test.ts        # 自動テスト
+│   ├── import.test.ts        # 自動テスト（28件）
 │   └── human-test-cases.md   # 手動テストケース一覧
 ├── docs/
 │   ├── index.html            # GitHub Pages トップページ
 │   ├── DESIGN.md             # 本設計書
 │   └── SETUP.md              # セットアップ手順（開発者向け）
 ├── dist/                     # コンパイル済みGASコード
-├── .clasp.json               # Glasp 設定ファイル
+├── .clasp.json               # clasp 設定ファイル
 ├── package.json
 ├── tsconfig.json
 ├── jest.config.js
@@ -143,18 +163,19 @@ gas-tweet-archive/
 
 ## 開発フェーズ
 
-### Phase 1: 基盤構築（現在地）
+### Phase 1: 基盤構築 ✅
 - [x] プロジェクト構成（package.json / tsconfig / jest）
 - [x] 型定義
-- [ ] GAS メニュー実装
-- [ ] HTML ダイアログ実装
-- [ ] インポート処理実装
-- [ ] ダッシュボード集計実装
-- [ ] テスト実装
-- [ ] GitHub Pages 公開
+- [x] GAS メニュー実装
+- [x] HTML アップロードダイアログ実装
+- [x] インポート処理実装（tweet.js / bookmark.js パース）
+- [x] ダッシュボード集計実装（refreshDashboard）
+- [x] ダッシュボードグラフ設定（7種のグラフ＋ヒートマップ）
+- [x] テスト実装（Jest 28件 pass）
+- [x] GitHub Pages 公開
 
 ### Phase 2: 機能充実
-- [ ] glasp デプロイパイプライン構築
+- [ ] clasp デプロイパイプライン構築
 - [ ] カスタムカテゴリ編集UI
 - [ ] エクスポート機能（CSV/MD）
 - [ ] 使い方ガイドの充実

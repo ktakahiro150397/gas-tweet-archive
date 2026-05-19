@@ -101,12 +101,12 @@ export function setupDashboardCharts(): void {
     writeBookmarkCategoryChartData();
   }
   if (!existingTitles.has('⏰ 時間帯アクティビティ')) {
-    charts.push(createHourlyActivityChart(sheet));
-    writeHourlyChartData();
-    createHourHeatmapFormatting();
+    const hourlyRef = writeHourlyChartData();
+    charts.push(createHourlyActivityChart(sheet, hourlyRef));
+    if (hourlyRef) createHourHeatmapFormatting(hourlyRef);
   } else {
-    writeHourlyChartData();
-    createHourHeatmapFormatting();
+    const hourlyRef = writeHourlyChartData();
+    if (hourlyRef) createHourHeatmapFormatting(hourlyRef);
   }
 
   // グラフをシートに挿入
@@ -427,14 +427,14 @@ function writeHourlyChartData(): { startRow: number; startCol: number; numRows: 
 
 function createHourlyActivityChart(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  hourlyRef: { startRow: number; startCol: number; numRows: number; numCols: number } | null,
 ): GoogleAppsScript.Spreadsheet.EmbeddedChart {
-  const ref = writeHourlyChartData();
-  if (!ref) throw new Error('時間帯データがありません');
+  if (!hourlyRef) throw new Error('時間帯データがありません');
 
   return sheet.newChart()
     .setChartType(Charts.ChartType.AREA)
     .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
-      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
+      .getRange(hourlyRef.startRow, hourlyRef.startCol, hourlyRef.numRows, hourlyRef.numCols))
     .setPosition(29, 8, 0, 0)
     .setOption('title', '⏰ 時間帯アクティビティ')
     .setOption('width', 500)
@@ -447,14 +447,17 @@ function createHourlyActivityChart(
 }
 
 /** _CHART_DATA の時間帯マトリクスに条件付き書式（3色スケール）を適用 */
-function createHourHeatmapFormatting(): void {
+function createHourHeatmapFormatting(
+  hourlyRef: { startRow: number; numRows: number; numCols: number },
+): void {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA);
   if (!sheet) return;
 
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-
-  const dataRange = sheet.getRange(2, 2, lastRow - 1, 24);
+  // 時間帯データのみに範囲を限定（hourlyRefの1行目はヘッダー行なので、データ開始行はstartRow+1）
+  const dataStartRow = hourlyRef.startRow + 1;
+  const dataNumRows = hourlyRef.numRows - 1;
+  // 時間帯マトリクスは「曜日ラベル列＋24時間分」= 25列。数値範囲は列B(2)〜Y(25)
+  const dataRange = sheet.getRange(dataStartRow, 2, dataNumRows, 24);
   const newRule = SpreadsheetApp.newConditionalFormatRule()
     .setRanges([dataRange])
     .setGradientMinpoint('#F5F5F5')

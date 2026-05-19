@@ -42,10 +42,8 @@ clasp login
 ### 4. ビルドしてプッシュ
 
 ```bash
-npm run build           # TypeScript → dist/
-cp -r src/pages/*.html dist/   # HTMLファイルもコピー
-cp appsscript.json dist/       # マニフェストもコピー
-clasp push               # GASにプッシュ
+npm run build           # TypeScript → dist/（HTML/appsscript.json含む）
+clasp push              # GASにプッシュ
 ```
 
 ### 5. GitHub Actions 用の Secrets を設定
