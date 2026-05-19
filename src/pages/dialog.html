@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif;
+      padding: 24px;
+      background: #fff;
+      color: #1a1a2e;
+      margin: 0;
+    }
+    .container { max-width: 420px; margin: 0 auto; }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #1a1a2e;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #666;
+      margin: 0 0 20px 0;
+      line-height: 1.5;
+    }
+    .upload-area {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      padding: 32px 20px;
+      text-align: center;
+      transition: all 0.2s;
+      background: #fafafa;
+      cursor: pointer;
+    }
+    .upload-area:hover {
+      border-color: #1DA1F2;
+      background: #f0f7ff;
+    }
+    .upload-area.dragover {
+      border-color: #1DA1F2;
+      background: #e8f4ff;
+    }
+    .upload-area .icon { font-size: 36px; margin-bottom: 8px; }
+    .upload-area .label { font-size: 14px; color: #333; font-weight: 600; }
+    .upload-area .hint { font-size: 12px; color: #999; margin-top: 4px; }
+    .file-input { display: none; }
+    .file-info {
+      display: none;
+      background: #f0f7ff;
+      border: 1px solid #cce5ff;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    .file-info .name { font-weight: 600; color: #1a1a2e; }
+    .file-info .size { color: #666; margin-left: 8px; }
+    .btn {
+      display: none;
+      width: 100%;
+      padding: 14px;
+      background: #1DA1F2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #1a8cd8; }
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .btn.loading {
+      background: #1a8cd8;
+      pointer-events: none;
+    }
+    .progress {
+      display: none;
+      margin-top: 16px;
+    }
+    .progress-bar {
+      height: 6px;
+      background: #e8e8e8;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #1DA1F2, #1a8cd8);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .progress-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+      text-align: center;
+    }
+    .supported {
+      margin-top: 20px;
+      padding: 12px 16px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #888;
+      line-height: 1.6;
+    }
+    .supported strong { color: #555; }
+    .error {
+      display: none;
+      background: #fff0f0;
+      border: 1px solid #ffcccc;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #cc0000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📥 Xアーカイブをインポート</h2>
+    <p class="subtitle">
+      Xのデータアーカイブから tweet.js または bookmark.js を選んでください。<br>
+      Google Drive にアップロードする必要はありません。
+    </p>
+
+    <div class="upload-area" id="uploadArea">
+      <div class="icon">📂</div>
+      <div class="label">クリックしてファイルを選択</div>
+      <div class="hint">またはドラッグ＆ドロップ</div>
+      <input type="file" class="file-input" id="fileInput" accept=".js,.json">
+    </div>
+
+    <div class="file-info" id="fileInfo">
+      <span class="name" id="fileName"></span>
+      <span class="size" id="fileSize"></span>
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <button class="btn" id="uploadBtn">🔄 インポート開始</button>
+
+    <div class="progress" id="progress">
+      <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">処理中...</div>
+    </div>
+
+    <div class="supported">
+      <strong>対応ファイル:</strong><br>
+      📄 <strong>tweet.js</strong> — 全ツイート履歴をダッシュボードで可視化<br>
+      📄 <strong>bookmark.js</strong> — ブックマークをカテゴリ分けして整理<br><br>
+      <strong>📖 使い方:</strong><br>
+      ① Xの設定 → 「データのダウンロード」をリクエスト<br>
+      ② 届いたzipを解凍 → tweet.js を取り出す<br>
+      ③ 上の「ファイルを選択」から選んでインポート開始！
+    </div>
+  </div>
+
+  <script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const progress = document.getElementById('progress');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const errorEl = document.getElementById('error');
+
+    let selectedFile = null;
+
+    // クリックでファイル選択
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    // ドラッグ＆ドロップ
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // ファイル選択
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        handleFile(fileInput.files[0]);
+      }
+    });
+
+    function handleFile(file) {
+      selectedFile = file;
+      const name = file.name;
+      const sizeKB = Math.round(file.size / 1024);
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+
+      // 拡張子チェック
+      if (!name.endsWith('.js') && !name.endsWith('.json')) {
+        showError('対応していないファイル形式です。.js または .json ファイルを選択してください。');
+        return;
+      }
+
+      hideError();
+      fileName.textContent = name;
+      fileSize.textContent = sizeKB > 1024 ? `(${sizeMB} MB)` : `(${sizeKB} KB)`;
+      fileInfo.style.display = 'block';
+      uploadBtn.style.display = 'block';
+      uploadBtn.textContent = name.includes('bookmark') ? '🔖 ブックマークをインポート開始' : '📥 ツイート履歴をインポート開始';
+      uploadBtn.disabled = false;
+    }
+
+    // インポート開始
+    uploadBtn.addEventListener('click', () => {
+      if (!selectedFile) return;
+
+      uploadBtn.disabled = true;
+      uploadBtn.classList.add('loading');
+      uploadBtn.textContent = '⏳ インポート中...';
+      progress.style.display = 'block';
+      progressFill.style.width = '10%';
+      progressText.textContent = 'ファイルを読み込み中...';
+
+      const reader = new FileReader();
+      reader.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 30);
+          progressFill.style.width = pct + '%';
+          progressText.textContent = `読み込み中... ${pct}%`;
+        }
+      };
+
+      reader.onload = (e) => {
+        progressFill.style.width = '30%';
+        progressText.textContent = 'GASに送信中...';
+
+        google.script.run
+          .withSuccessHandler((msg) => {
+            progressFill.style.width = '100%';
+            progressText.textContent = msg;
+            setTimeout(() => google.script.host.close(), 2000);
+          })
+          .withFailureHandler((err) => {
+            uploadBtn.disabled = false;
+            uploadBtn.classList.remove('loading');
+            uploadBtn.textContent = '🔄 インポート開始';
+            progress.style.display = 'none';
+            showError('インポートに失敗しました: ' + err.message);
+          })
+          .processUploadedFile(e.target.result, selectedFile.name);
+      };
+
+      reader.onerror = () => {
+        uploadBtn.disabled = false;
+        uploadBtn.classList.remove('loading');
+        uploadBtn.textContent = '🔄 インポート開始';
+        progress.style.display = 'none';
+        showError('ファイルの読み込みに失敗しました');
+      };
+
+      reader.readAsText(selectedFile);
+    });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+    function hideError() {
+      errorEl.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
