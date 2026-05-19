@@ -55,8 +55,10 @@ export function onOpen(): void {
   .addSeparator()
   .addItem('📊 グラフをセットアップ', 'setupDashboardCharts')
   .addSeparator()
-    .addItem('📖 使い方ガイド表示', 'showGuide')
-    .addSeparator()
+  .addItem('📖 使い方ガイド表示', 'showGuide')
+  .addSeparator()
+  .addItem('🛠️ シートを初期化', 'initializeSheets')
+  .addSeparator()
     .addItem('ℹ️ バージョン情報', 'showAbout')
     .addToUi();
 }

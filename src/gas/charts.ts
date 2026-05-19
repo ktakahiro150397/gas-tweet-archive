@@ -83,9 +83,6 @@ export function setupDashboardCharts(): void {
     sheet.insertChart(charts[i]);
   }
 
-  // レイアウト整理
-  arrangeCharts(sheet);
-
   if (charts.length === 0) {
     SpreadsheetApp.getActiveSpreadsheet().toast(
       '✅ グラフは全てセットアップ済みです',
@@ -339,15 +336,4 @@ function createBookmarkCategoryChart(
 /** _CACHEシートを取得 */
 function getCacheSheet(): GoogleAppsScript.Spreadsheet.Sheet | null {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CACHE);
-}
-
-/**
- * グラフのレイアウトを整理する。
- * 各グラフの位置は setPosition で個別指定しているので、
- * ここでは余白調整のみ行う。
- */
-function arrangeCharts(_sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
-  // 現在グラフの挿入は個別の setPosition で制御しているため、
-  // 追加のレイアウト処理は現時点では不要。
-  // 必要に応じて行の高さや列幅を調整する場合はここに追記。
 }
