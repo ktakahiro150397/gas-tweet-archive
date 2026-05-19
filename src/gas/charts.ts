@@ -3,7 +3,7 @@
  *
  * Google Apps Script で DASHBOARD シートにグラフを自動作成する。
  * 各グラフは _CACHE シートの集計データを範囲として設定し、
- * ユーザーが手動でグラフを追加する手間を省く。
+ * チャート用中間データは _CHART_DATA シートに分離して書き込む。
  *
  * このモジュールはメニューから「📊 グラフをセットアップ」で実行できる。
  * 初回セットアップ時のみ使用。グラフは一度作れば永続する。
@@ -11,8 +11,12 @@
 
 import { SHEETS } from './main';
 
-// ─── グラフ色定義 ────────────────────────────────────────────────
+// ─── 定数 ────────────────────────────────────────────────────────
 
+/** チャート中間データ用シート名（_CACHEと分離） */
+const CHART_DATA = '🔲 _CHART_DATA';
+
+/** グラフ色定義 */
 const COLORS = {
   primary: '#1DA1F2',
   secondary: '#FF6B35',
@@ -53,6 +57,9 @@ export function setupDashboardCharts(): void {
     return;
   }
 
+  // _CHART_DATA シートを準備（古いデータをクリーンアップ）
+  prepareChartDataSheet();
+
   // 既存グラフを取得
   const existingCharts = sheet.getCharts();
   const existingTitles = new Set(
@@ -77,6 +84,10 @@ export function setupDashboardCharts(): void {
   if (!existingTitles.has('🏷️ ブックマークカテゴリ')) {
     charts.push(createBookmarkCategoryChart(sheet));
   }
+  if (!existingTitles.has('⏰ 時間帯アクティビティ')) {
+    charts.push(createHourlyActivityChart(sheet));
+    createHourHeatmapFormatting();
+  }
 
   // グラフをシートに挿入
   for (let i = 0; i < charts.length; i++) {
@@ -98,6 +109,59 @@ export function setupDashboardCharts(): void {
   }
 }
 
+// ─── _CHART_DATA シート管理 ──────────────────────────────────────
+
+/**
+ * _CHART_DATA シートを準備する。
+ * 存在しなければ作成し、既存データをクリアしてからヘッダー行を設定する。
+ */
+function prepareChartDataSheet(): void {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CHART_DATA);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(CHART_DATA);
+  }
+
+  // 既存の全データをクリア
+  sheet.clear();
+
+  // 非表示に設定
+  if (!sheet.isSheetHidden()) {
+    sheet.hideSheet();
+  }
+}
+
+/**
+ * チャートデータを _CHART_DATA シートに書き込む。
+ * @returns 書き込み先のRange情報 { startRow, startCol }（グラフ参照範囲として使用）
+ */
+function writeChartData(
+  header: string[],
+  rows: Array<Array<string | number>>,
+): { startRow: number; startCol: number; numRows: number; numCols: number } {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA);
+  if (!sheet) throw new Error(`${CHART_DATA} シートが見つかりません`);
+
+  const data = [header, ...rows.map((r) => [...r])];
+  const lastRow = sheet.getLastRow() + 1; // 前回の書き込みの次
+  const startCol = 1;
+
+  sheet.getRange(lastRow, startCol, data.length, header.length).setValues(data);
+
+  return {
+    startRow: lastRow,
+    startCol,
+    numRows: data.length,
+    numCols: header.length,
+  };
+}
+
+/** _CACHEシートを取得 */
+function getCacheSheet(): GoogleAppsScript.Spreadsheet.Sheet | null {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CACHE);
+}
+
 // ─── 各グラフ作成関数 ────────────────────────────────────────────
 
 /**
@@ -111,7 +175,6 @@ function createTweetsByMonthChart(
   if (!cacheSheet) throw new Error('_CACHEシートが見つかりません');
 
   const data = cacheSheet.getDataRange().getValues();
-  // month_* の行を抽出
   const monthRows: Array<[string, number]> = [];
   for (const row of data) {
     const key = String(row[0]);
@@ -124,18 +187,15 @@ function createTweetsByMonthChart(
     throw new Error('月次データがありません');
   }
 
-  // データを書き込み用シートに仮配置
-  const startRow = 1;
-  const headerRow: string[] = ['月', 'ツイート数'];
-  const chartData = [headerRow, ...monthRows.map((r) => [r[0], r[1]])];
+  const ref = writeChartData(
+    ['月', 'ツイート数'],
+    monthRows,
+  );
 
-  // キャッシュシートの末尾に描画用テーブルを追加
-  const lastRow = cacheSheet.getLastRow() + 2;
-  cacheSheet.getRange(lastRow, 4, chartData.length, 2).setValues(chartData);
-
-  const chartBuilder = sheet.newChart()
+  return sheet.newChart()
     .setChartType(Charts.ChartType.LINE)
-    .addRange(cacheSheet.getRange(lastRow, 4, chartData.length, 2))
+    .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
+      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
     .setPosition(3, 1, 0, 0)
     .setOption('title', '📈 月間投稿トレンド')
     .setOption('width', 500)
@@ -145,9 +205,8 @@ function createTweetsByMonthChart(
     .setOption('colors', [COLORS.primary])
     .setOption('pointSize', 5)
     .setOption('hAxis', { slantedText: true, slantedTextAngle: 45 })
-    .setOption('vAxis', { minValue: 0 });
-
-  return chartBuilder.build();
+    .setOption('vAxis', { minValue: 0 })
+    .build();
 }
 
 /**
@@ -160,35 +219,31 @@ function createTweetsByTypeChart(
   if (!cacheSheet) throw new Error('_CACHEシートが見つかりません');
 
   const data = cacheSheet.getDataRange().getValues();
-  const typeData: Array<[string, number]> = [];
   const typeOrder = ['Original', 'Reply', 'Retweet', 'Quote'];
-  for (const key of typeOrder) {
+  const typeData: Array<[string, number]> = typeOrder.map((key) => {
     const found = data.find((r) => r[0] === `type_${key}`);
-    typeData.push([key, found ? Number(found[1]) : 0]);
-  }
+    return [key, found ? Number(found[1]) : 0];
+  });
 
-  const chartData = [
+  const ref = writeChartData(
     ['種別', '件数'],
-    ...typeData.map((r) => [r[0], r[1]]),
-  ];
-
-  const lastRow = cacheSheet.getLastRow() + 2;
-  cacheSheet.getRange(lastRow, 4, chartData.length, 2).setValues(chartData);
+    typeData,
+  );
 
   const colors = typeOrder.map((t) => TYPE_COLORS[t] || COLORS.gray);
 
-  const chartBuilder = sheet.newChart()
+  return sheet.newChart()
     .setChartType(Charts.ChartType.BAR)
-    .addRange(cacheSheet.getRange(lastRow, 4, chartData.length, 2))
+    .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
+      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
     .setPosition(3, 8, 0, 0)
     .setOption('title', '📊 ツイート種別構成')
     .setOption('width', 450)
     .setOption('height', 220)
     .setOption('legend', { position: 'none' })
     .setOption('colors', colors)
-    .setOption('hAxis', { minValue: 0 });
-
-  return chartBuilder.build();
+    .setOption('hAxis', { minValue: 0 })
+    .build();
 }
 
 /**
@@ -202,7 +257,6 @@ function createTopLikedChart(
 
   const data = cacheSheet.getDataRange().getValues();
 
-  // top_liked_N_text / top_liked_N_likes を収集
   const topEntries: Array<{ text: string; likes: number }> = [];
   for (const row of data) {
     const key = String(row[0]);
@@ -220,26 +274,23 @@ function createTopLikedChart(
     throw new Error('いいねデータがありません');
   }
 
-  const chartData = [
+  const ref = writeChartData(
     ['ツイート', 'いいね'],
-    ...topEntries.map((e) => [e.text, e.likes]),
-  ];
+    topEntries.map((e) => [e.text, e.likes]),
+  );
 
-  const lastRow = cacheSheet.getLastRow() + 2;
-  cacheSheet.getRange(lastRow, 4, chartData.length, 2).setValues(chartData);
-
-  const chartBuilder = sheet.newChart()
+  return sheet.newChart()
     .setChartType(Charts.ChartType.BAR)
-    .addRange(cacheSheet.getRange(lastRow, 4, chartData.length, 2))
+    .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
+      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
     .setPosition(16, 1, 0, 0)
     .setOption('title', '🏆 トップいいねランキング')
     .setOption('width', 500)
     .setOption('height', 300)
     .setOption('legend', { position: 'none' })
     .setOption('colors', [COLORS.orange])
-    .setOption('hAxis', { minValue: 0 });
-
-  return chartBuilder.build();
+    .setOption('hAxis', { minValue: 0 })
+    .build();
 }
 
 /**
@@ -253,32 +304,28 @@ function createDayOfWeekChart(
 
   const data = cacheSheet.getDataRange().getValues();
 
-  const dayData: Array<[string, number]> = [];
-  for (const key of DAY_KEYS) {
+  const dayData: Array<[string, number]> = DAY_KEYS.map((key) => {
     const found = data.find((r) => r[0] === `day_${key}`);
-    dayData.push([key, found ? Number(found[1]) : 0]);
-  }
+    return [key, found ? Number(found[1]) : 0];
+  });
 
-  const chartData = [
+  const ref = writeChartData(
     ['曜日', 'ツイート数'],
-    ...dayData.map((r, i) => [DAY_LABELS_JP[i], r[1]]),
-  ];
+    dayData.map((r, i) => [DAY_LABELS_JP[i], r[1]]),
+  );
 
-  const lastRow = cacheSheet.getLastRow() + 2;
-  cacheSheet.getRange(lastRow, 4, chartData.length, 2).setValues(chartData);
-
-  const chartBuilder = sheet.newChart()
+  return sheet.newChart()
     .setChartType(Charts.ChartType.COLUMN)
-    .addRange(cacheSheet.getRange(lastRow, 4, chartData.length, 2))
+    .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
+      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
     .setPosition(16, 8, 0, 0)
     .setOption('title', '🗓️ 曜日アクティビティ')
     .setOption('width', 450)
     .setOption('height', 250)
     .setOption('legend', { position: 'none' })
     .setOption('colors', [COLORS.accent])
-    .setOption('vAxis', { minValue: 0 });
-
-  return chartBuilder.build();
+    .setOption('vAxis', { minValue: 0 })
+    .build();
 }
 
 /**
@@ -304,13 +351,10 @@ function createBookmarkCategoryChart(
     throw new Error('ブックマークデータがありません');
   }
 
-  const chartData = [
+  const ref = writeChartData(
     ['カテゴリ', '件数'],
-    ...catData,
-  ];
-
-  const lastRow = cacheSheet.getLastRow() + 2;
-  cacheSheet.getRange(lastRow, 4, chartData.length, 2).setValues(chartData);
+    catData,
+  );
 
   const donutColors = [
     COLORS.primary, COLORS.secondary, COLORS.accent,
@@ -318,22 +362,98 @@ function createBookmarkCategoryChart(
     COLORS.teal, COLORS.gray,
   ];
 
-  const chartBuilder = sheet.newChart()
+  return sheet.newChart()
     .setChartType(Charts.ChartType.PIE)
-    .addRange(cacheSheet.getRange(lastRow, 4, chartData.length, 2))
+    .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
+      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
     .setPosition(29, 1, 0, 0)
     .setOption('title', '🏷️ ブックマークカテゴリ')
     .setOption('width', 450)
     .setOption('height', 300)
     .setOption('pieHole', 0.4)
-    .setOption('colors', donutColors);
-
-  return chartBuilder.build();
+    .setOption('colors', donutColors)
+    .build();
 }
 
-// ─── ユーティリティ ──────────────────────────────────────────────
+/**
+ * グラフ6: 時間帯アクティビティ（熱中グラフ + 表）
+ *
+ * hour_{day}_{hour} データを読み取り、時間帯×曜日のマトリクスを
+ * _CHART_DATA シートに書き込む。グラフ表示後に条件付き書式で
+ * ヒートマップ効果を適用する。
+ */
+function createHourlyActivityChart(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+): GoogleAppsScript.Spreadsheet.EmbeddedChart {
+  const cacheSheet = getCacheSheet();
+  if (!cacheSheet) throw new Error('_CACHEシートが見つかりません');
 
-/** _CACHEシートを取得 */
-function getCacheSheet(): GoogleAppsScript.Spreadsheet.Sheet | null {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CACHE);
+  const data = cacheSheet.getDataRange().getValues();
+
+  // hour_{day}_{hour} データをパース
+  // day: Mon/Tue/Wed/Thu/Fri/Sat/Sun, hour: 0-23
+  const hourData: Record<string, Record<number, number>> = {};
+  for (const row of data) {
+    const key = String(row[0]);
+    if (key.startsWith('hour_')) {
+      const parts = key.split('_'); // hour, {day}, {hour}
+      if (parts.length >= 3) {
+        const day = parts[1];
+        const hour = parseInt(parts[2], 10);
+        if (!hourData[day]) hourData[day] = {};
+        hourData[day][hour] = Number(row[1]);
+      }
+    }
+  }
+
+  // ヘッダー行: 時刻ラベル（0時, 1時, ... 23時）
+  const hourLabels = Array.from({ length: 24 }, (_, i) => `${i}時`);
+  const header = ['', ...hourLabels];
+
+  // 曜日ごとの行データ
+  const rows: Array<Array<string | number>> = DAY_KEYS.map((day, di) => {
+    const dayLabel = DAY_LABELS_JP[di];
+    const hourCounts = Array.from({ length: 24 }, (_, h) => hourData[day]?.[h] ?? 0);
+    return [dayLabel, ...hourCounts];
+  });
+
+  const ref = writeChartData(header, rows);
+
+  // グラフは積み上げエリア（時間帯×曜日の分布を可視化）
+  return sheet.newChart()
+    .setChartType(Charts.ChartType.AREA)
+    .addRange(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA)!
+      .getRange(ref.startRow, ref.startCol, ref.numRows, ref.numCols))
+    .setPosition(29, 8, 0, 0)
+    .setOption('title', '⏰ 時間帯アクティビティ')
+    .setOption('width', 500)
+    .setOption('height', 250)
+    .setOption('legend', { position: 'right' })
+    .setOption('colors', [COLORS.primary, COLORS.orange, COLORS.green, COLORS.accent, COLORS.pink, COLORS.teal, COLORS.gray])
+    .setOption('hAxis', { slantedText: true, slantedTextAngle: 45 })
+    .setOption('vAxis', { minValue: 0 })
+    .build();
+}
+
+/**
+ * _CHART_DATA の時間帯マトリクスに条件付き書式（3色スケール）
+ * を適用してヒートマップ効果を出す。
+ */
+function createHourHeatmapFormatting(): void {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHART_DATA);
+  if (!sheet) return;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  // 時間帯マトリクスの数値範囲に3色スケール条件付き書式を設定
+  const dataRange = sheet.getRange(2, 2, lastRow - 1, 24);
+  const newRule = SpreadsheetApp.newConditionalFormatRule()
+    .setRanges([dataRange])
+    .setGradientMinpoint('#F5F5F5')
+    .setGradientMidpointWithValue('#FFD700', SpreadsheetApp.InterpolationType.PERCENTILE, '50')
+    .setGradientMaxpoint('#FF4500')
+    .build();
+
+  sheet.setConditionalFormatRules([newRule]);
 }

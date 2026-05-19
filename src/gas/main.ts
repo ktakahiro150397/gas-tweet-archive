@@ -59,8 +59,8 @@ export function onOpen(): void {
   .addSeparator()
   .addItem('🛠️ シートを初期化', 'initializeSheets')
   .addSeparator()
-    .addItem('ℹ️ バージョン情報', 'showAbout')
-    .addToUi();
+  .addItem('ℹ️ バージョン情報', 'showAbout')
+  .addToUi();
 }
 
 // ─── メニューアクション ──────────────────────────────────────────
