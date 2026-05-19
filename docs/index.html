@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GAS Tweet Archive — Xツイート履歴をスプレッドシートで可視化</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --surface: #141416;
+      --border: #27272a;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --accent: #1DA1F2;
+      --accent-hover: #1a8cd8;
+      --green: #22c55e;
+      --orange: #f59e0b;
+      --purple: #a855f7;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero {
+      padding: 100px 0 60px;
+      text-align: center;
+      background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: rgba(29, 161, 242, 0.1);
+      border: 1px solid rgba(29, 161, 242, 0.3);
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--accent);
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 900;
+      letter-spacing: -2px;
+      margin-bottom: 16px;
+    }
+    .hero h1 span { background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; border-radius: 10px; font-weight: 600; font-size: 15px;
+      text-decoration: none; transition: all 0.2s; cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--muted); transform: translateY(-1px); }
+
+    /* Features */
+    .features { padding: 80px 0; }
+    .features h2 {
+      font-size: 32px; font-weight: 800; text-align: center; margin-bottom: 48px;
+    }
+    .feature-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 32px; transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); }
+    .feature-icon { font-size: 32px; margin-bottom: 16px; }
+    .feature-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+    /* Steps */
+    .steps { padding: 80px 0; background: var(--surface); border-top: 1px solid var(--border); }
+    .steps h2 { font-size: 32px; font-weight: 800; text-align: center; margin-bottom: 48px; }
+    .step-list { max-width: 700px; margin: 0 auto; }
+    .step-item {
+      display: flex; gap: 20px; margin-bottom: 32px;
+    }
+    .step-num {
+      width: 44px; height: 44px; min-width: 44px;
+      background: rgba(29, 161, 242, 0.1); border: 1px solid rgba(29, 161, 242, 0.3);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 18px; color: var(--accent);
+    }
+    .step-content h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .step-content p { color: var(--muted); font-size: 14px; }
+
+    /* Dashboard Preview */
+    .preview { padding: 80px 0; }
+    .preview h2 { font-size: 32px; font-weight: 800; text-align: center; margin-bottom: 48px; }
+    .preview-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;
+    }
+    .preview-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 24px;
+    }
+    .preview-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--muted); }
+    .mock-chart { height: 120px; background: linear-gradient(90deg, rgba(29,161,242,0.1) 0%, rgba(29,161,242,0.05) 100%); border-radius: 8px; position: relative; overflow: hidden; }
+    .mock-bar { position: absolute; bottom: 0; background: var(--accent); border-radius: 4px 4px 0 0; opacity: 0.6; }
+    .mock-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mock-stat { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 16px; text-align: center; }
+    .mock-stat .num { font-size: 28px; font-weight: 800; }
+    .mock-stat .label { font-size: 12px; color: var(--muted); }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 32px; }
+      .hero { padding: 60px 0 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">🚀 Google Apps Script + TypeScript</div>
+    <h1><span>X の全ツイート履歴</span>を<br>スプレッドシートで分析</h1>
+    <p>データアーカイブ（tweet.js）をアップロードするだけ。月間トレンド・いいねランキング・時間帯ヒートマップを自動生成。</p>
+    <div class="hero-actions">
+      <a href="#features" class="btn btn-primary">✨ できることを見る</a>
+      <a href="#steps" class="btn btn-secondary">📖 使い方を見る</a>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <h2>🎯 できること</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📥</div>
+        <h3>ファイル選択するだけの簡単インポート</h3>
+        <p>Google Drive にアップロード不要。ダイアログから tweet.js を選ぶだけで全ツイート履歴をスプレッドシートに取り込みます。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>ダッシュボードで一発可視化</h3>
+        <p>月間投稿トレンド、ツイート種別構成比、いいねランキング、曜日アクティビティ — 全グラフが自動生成されます。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌡️</div>
+        <h3>時間帯ヒートマップ</h3>
+        <p>いつツイートする傾向があるか？を曜日×時間帯のマトリックスで色分け表示。朝型か夜型かが一目でわかります。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔖</div>
+        <h3>ブックマーク整理</h3>
+        <p>bookmark.js もインポート可能。カテゴリ分け・重要度設定・ステータス管理で「保存したまま見返さない問題」を解決。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👤</div>
+        <h3>誰とよく絡むか分析</h3>
+        <p>リプライ送信数・ブックマーク数から、自分が最もインタラクションしているアカウントをランキング表示。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <h3>買い切り ¥980（予定）</h3>
+        <p>月額課金なし。Google アカウントさえあれば使えます。データは自分の Google Drive の中だけで完結。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="steps" id="steps">
+  <div class="container">
+    <h2>📖 使い方（3ステップ）</h2>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>X からデータをダウンロード</h3>
+          <p>Xの設定 → 「あなたのアカウント」 → 「データのダウンロード」をリクエスト。zipで送られてくるので解凍します。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>スプレッドシートでインポート</h3>
+          <p>スプレッドシートを開き、メニューから「📥 データをインポート」→ tweet.js を選択。自動で全ツイートが読み込まれます。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>ダッシュボードを眺める</h3>
+          <p>完了したら📊 DASHBOARD シートに移動。グラフや数値で自分のツイート傾向を好きなだけ分析できます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="preview">
+  <div class="container">
+    <h2>📊 ダッシュボードイメージ</h2>
+    <div class="preview-grid">
+      <div class="preview-card">
+        <h3>📈 月間投稿トレンド</h3>
+        <div class="mock-chart">
+          <div class="mock-bar" style="left:5%;width:6%;height:30%;"></div>
+          <div class="mock-bar" style="left:15%;width:6%;height:45%;"></div>
+          <div class="mock-bar" style="left:25%;width:6%;height:60%;"></div>
+          <div class="mock-bar" style="left:35%;width:6%;height:80%;"></div>
+          <div class="mock-bar" style="left:45%;width:6%;height:55%;"></div>
+          <div class="mock-bar" style="left:55%;width:6%;height:70%;"></div>
+          <div class="mock-bar" style="left:65%;width:6%;height:90%;"></div>
+          <div class="mock-bar" style="left:75%;width:6%;height:40%;"></div>
+          <div class="mock-bar" style="left:85%;width:6%;height:65%;"></div>
+        </div>
+      </div>
+      <div class="preview-card">
+        <h3>🏆 トップいいねランキング</h3>
+        <div class="mock-chart" style="display:flex;flex-direction:column;gap:6px;padding:8px 0;height:120px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+            <span style="width:24px;">🥇</span>
+            <div style="flex:1;height:18px;background:rgba(29,161,242,0.2);border-radius:4px;overflow:hidden;">
+              <div style="width:85%;height:100%;background:var(--accent);border-radius:4px;"></div>
+            </div>
+            <span style="min-width:40px;text-align:right;">♡2.3k</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+            <span style="width:24px;">🥈</span>
+            <div style="flex:1;height:18px;background:rgba(29,161,242,0.2);border-radius:4px;overflow:hidden;">
+              <div style="width:65%;height:100%;background:var(--accent);border-radius:4px;"></div>
+            </div>
+            <span style="min-width:40px;text-align:right;">♡1.8k</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+            <span style="width:24px;">🥉</span>
+            <div style="flex:1;height:18px;background:rgba(29,161,242,0.2);border-radius:4px;overflow:hidden;">
+              <div style="width:50%;height:100%;background:var(--accent);border-radius:4px;"></div>
+            </div>
+            <span style="min-width:40px;text-align:right;">♡1.2k</span>
+          </div>
+        </div>
+      </div>
+      <div class="preview-card">
+        <h3>📊 スコアカード</h3>
+        <div class="mock-stats">
+          <div class="mock-stat"><div class="num">52,341</div><div class="label">総ツイート数</div></div>
+          <div class="mock-stat"><div class="num">184k</div><div class="label">総いいね数</div></div>
+          <div class="mock-stat"><div class="num">42%</div><div class="label">リプライ率</div></div>
+          <div class="mock-stat"><div class="num">7年</div><div class="label">アクティブ期間</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>GAS Tweet Archive — <a href="https://github.com/ktakahiro150397/gas-tweet-archive" style="color:var(--accent);text-decoration:none;">GitHub</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
