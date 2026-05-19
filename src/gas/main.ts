@@ -10,6 +10,7 @@
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { parseTweetJs, parseBookmarkJs, chunkArray } from './import';
+import { setupDashboardCharts } from './charts';
 
 // ─── 定数 ────────────────────────────────────────────────────────
 
@@ -50,9 +51,11 @@ const CHUNK_SIZE = 1000;
 export function onOpen(): void {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('📊 X Archive Tools')
-    .addItem('📥 データをインポート', 'showUploadDialog')
-    .addItem('🔄 ダッシュボード更新', 'refreshDashboard')
-    .addSeparator()
+  .addItem('📥 データをインポート', 'showUploadDialog')
+  .addItem('🔄 ダッシュボード更新', 'refreshDashboard')
+  .addSeparator()
+  .addItem('📊 グラフをセットアップ', 'setupDashboardCharts')
+  .addSeparator()
     .addItem('📖 使い方ガイド表示', 'showGuide')
     .addSeparator()
     .addItem('ℹ️ バージョン情報', 'showAbout')
