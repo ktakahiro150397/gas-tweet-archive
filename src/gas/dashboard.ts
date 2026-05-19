@@ -3,9 +3,15 @@
  *
  * プリコンピュート方式：TWEETSシートの生データをGASで集計し、
  * _CACHEシートに書き込む。DASHBOARDは_CACHEのSUM参照のみ。
+ *
+ * @deprecated このモジュールのロジックは main.ts の refreshDashboard()
+ * にインライン実装されています。今後リファクタリングの際に
+ * このモジュールに集約することを検討してください。
+ *
+ * @see main.ts#refreshDashboard
  */
 
-import { TweetRow, DashboardCache } from '../types';
+import type { TweetRow, TweetType } from './import';
 
 /** キャッシュ計算エントリポイント */
 export function computeCache(rows: TweetRow[]): DashboardCache {
@@ -32,10 +38,25 @@ export function computeCache(rows: TweetRow[]): DashboardCache {
   };
 }
 
+export interface DashboardCache {
+  totalTweets: number;
+  totalLikes: number;
+  activePeriodStart: string;
+  activePeriodEnd: string;
+  totalBookmarks: number;
+  tweetsByMonth: Array<{ month: string; count: number }>;
+  tweetsByType: Record<TweetType, number>;
+  tweetsByDayOfWeek: Record<string, number>;
+  tweetsByHour: Record<string, Record<number, number>>;
+  topLiked: Array<{ text: string; likes: number; date: string }>;
+  topAuthors: Array<{ author: string; count: number }>;
+  bookmarkCategories: Array<{ category: string; count: number }>;
+}
+
 function aggregateByMonth(rows: TweetRow[]): Array<{ month: string; count: number }> {
   const map = new Map<string, number>();
   for (const row of rows) {
-    const key = row.date.slice(0, 7); // "2023-03"
+    const key = row.date.slice(0, 7);
     map.set(key, (map.get(key) || 0) + 1);
   }
   return Array.from(map.entries())
@@ -81,7 +102,5 @@ function getTopLiked(rows: TweetRow[], n: number) {
 }
 
 function getTopAuthors(_rows: TweetRow[], _n: number): Array<{ author: string; count: number }> {
-  // TWEETSシートには著者情報がないため別途集計が必要
-  // bookmark.jsが別途インポートされた時に計算する
   return [];
 }

@@ -4,10 +4,10 @@
   "description": "X(Twitter)データアーカイブをGoogleスプレッドシートで可視化・分析するツール",
   "private": true,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r src/pages/*.html dist/ && cp appsscript.json dist/",
     "test": "jest",
     "test:watch": "jest --watch",
-    "deploy": "npm run build && echo 'TODO: clasp push'",
+    "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {

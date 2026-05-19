@@ -210,6 +210,13 @@
       const sizeKB = Math.round(file.size / 1024);
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
 
+      // ファイルサイズチェック（GAS HTML Service の上限は約50MB）
+      const MAX_SIZE = 50 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        showError('ファイルサイズが大きすぎます（上限: 50MB）。Xのデータアーカイブは通常5MB以下です。');
+        return;
+      }
+
       // 拡張子チェック
       if (!name.endsWith('.js') && !name.endsWith('.json')) {
         showError('対応していないファイル形式です。.js または .json ファイルを選択してください。');

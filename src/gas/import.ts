@@ -28,9 +28,13 @@ export interface Tweet {
   source?: string;
   in_reply_to_screen_name?: string;
   is_quote_status?: boolean;
+  retweeted_status?: Record<string, unknown>;
   entities?: {
     media?: Array<{ type: string }>;
     urls?: Array<{ expanded_url: string }>;
+  };
+  extended_entities?: {
+    media?: Array<{ type: string }>;
   };
   tweet?: Tweet;
 }
@@ -60,43 +64,48 @@ export interface Bookmark {
  * @throws JSONのパースに失敗した場合
  */
 export function parseTweetJs(rawJson: string): string[][] {
-  const json = extractJson(rawJson);
-  const tweets: Tweet[] = ensureArray(JSON.parse(json));
+  try {
+    const json = extractJson(rawJson);
+    const tweets: Tweet[] = ensureArray(JSON.parse(json));
 
-  return tweets.map((t) => {
-    const tw: Tweet = t.tweet ?? t;
-    const createdAt = tw.created_at || '';
-    const { dateStr, timeStr } = parseTimestamp(createdAt);
-    const text = (tw.full_text ?? tw.text ?? '') as string;
-    const fav = Number(tw.favorite_count ?? tw.favorite ?? 0);
-    const rt = Number(tw.retweet_count ?? tw.retweet ?? 0);
-    const reply = Number(tw.reply_count ?? 0);
-    const source = extractSourceName((tw.source as string) || '');
-    const inReplyTo = tw.in_reply_to_screen_name as string | undefined;
-    const isQuote = Boolean(tw.is_quote_status);
-    const isRetweet = text.startsWith('RT @');
-    const type = isRetweet ? 'Retweet'
-      : inReplyTo ? 'Reply'
-      : isQuote ? 'Quote'
-      : 'Original';
+    return tweets.map((t) => {
+      const tw: Tweet = t.tweet ?? t;
+      const createdAt = tw.created_at || '';
+      const { dateStr, timeStr } = parseTimestamp(createdAt);
+      const text = (tw.full_text ?? tw.text ?? '') as string;
+      const fav = Number(tw.favorite_count ?? tw.favorite ?? 0);
+      const rt = Number(tw.retweet_count ?? tw.retweet ?? 0);
+      const reply = Number(tw.reply_count ?? 0);
+      const source = extractSourceName((tw.source as string) || '');
+      const inReplyTo = tw.in_reply_to_screen_name as string | undefined;
+      const isQuote = Boolean(tw.is_quote_status);
+      const isRetweet = tw.retweeted_status !== undefined || text.startsWith('RT @');
+      const type = isRetweet ? 'Retweet'
+        : inReplyTo ? 'Reply'
+        : isQuote ? 'Quote'
+        : 'Original';
 
-    const media = tw.entities?.media || [];
-    const hasImage = media.length > 0;
+      const media = tw.extended_entities?.media ?? tw.entities?.media ?? [];
+      const hasImage = media.length > 0;
 
-    return [
-      dateStr,
-      timeStr,
-      text,
-      type,
-      String(fav),
-      String(rt),
-      String(reply),
-      source,
-      `https://x.com/i/web/status/${tw.id_str}`,
-      hasImage ? 'TRUE' : 'FALSE',
-      '', // 週番号（後日対応。WEEKNUM数式で補完可能）
-    ];
-  });
+      return [
+        dateStr,
+        timeStr,
+        text,
+        type,
+        String(fav),
+        String(rt),
+        String(reply),
+        source,
+        `https://x.com/i/web/status/${tw.id_str}`,
+        hasImage ? 'TRUE' : 'FALSE',
+        '', // 週番号（後日対応。WEEKNUM数式で補完可能）
+      ];
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '不明なエラー';
+    throw new Error(`tweet.jsのパースに失敗しました: ${message}`);
+  }
 }
 
 /**
@@ -106,41 +115,64 @@ export function parseTweetJs(rawJson: string): string[][] {
  * @returns [保存日, 著者, 内容, いいね数, URL, カテゴリ, 重要度, ステータス, メモ] の配列
  */
 export function parseBookmarkJs(rawJson: string): string[][] {
-  const json = extractJson(rawJson);
-  const bmList: Bookmark[] = ensureArray(JSON.parse(json));
+  try {
+    const json = extractJson(rawJson);
+    const bmList: Bookmark[] = ensureArray(JSON.parse(json));
 
-  return bmList.map((b) => {
-    const bm: Bookmark = b.bookmark ?? b;
-    const createdAt = bm.created_at || '';
-    let dateStr = createdAt.slice(0, 10);
-    if (!dateStr || dateStr === '' || isNaN(Date.parse(createdAt))) {
-      const parsed = parseTimestamp(createdAt);
-      dateStr = parsed.dateStr;
-    }
+    return bmList.map((b) => {
+      const bm: Bookmark = b.bookmark ?? b;
+      const createdAt = bm.created_at || '';
+      let dateStr = createdAt.slice(0, 10);
+      if (!dateStr || dateStr === '' || isNaN(Date.parse(createdAt))) {
+        const parsed = parseTimestamp(createdAt);
+        dateStr = parsed.dateStr;
+      }
 
-    const text = (bm.full_text ?? bm.tweet?.full_text ?? bm.text ?? '') as string;
-    const userObj = (bm.user ?? {}) as { screen_name?: string };
-    const screenName = userObj.screen_name ?? bm.screen_name ?? '';
-    const fav = Number(bm.favorite_count ?? 0);
-    const rt = Number(bm.retweet_count ?? 0);
+      const text = (bm.full_text ?? bm.tweet?.full_text ?? bm.text ?? '') as string;
+      const userObj = (bm.user ?? {}) as { screen_name?: string };
+      const screenName = userObj.screen_name ?? bm.screen_name ?? '';
+      const fav = Number(bm.favorite_count ?? 0);
+      const rt = Number(bm.retweet_count ?? 0);
 
-    return [
-      dateStr,
-      screenName ? `@${screenName}` : '',
-      text,
-      String(fav),
-      screenName
-        ? `https://x.com/${screenName}/status/${bm.id_str}`
-        : `https://x.com/i/web/status/${bm.id_str}`,
-      '',    // カテゴリ（手動入力）
-      '',    // 重要度（手動入力）
-      '未整理', // ステータス（初期値）
-      '',    // メモ
-    ];
-  });
+      return [
+        dateStr,
+        screenName ? `@${screenName}` : '',
+        text,
+        String(fav),
+        screenName
+          ? `https://x.com/${screenName}/status/${bm.id_str}`
+          : `https://x.com/i/web/status/${bm.id_str}`,
+        '',    // カテゴリ（手動入力）
+        '',    // 重要度（手動入力）
+        '未整理', // ステータス（初期値）
+        '',    // メモ
+      ];
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '不明なエラー';
+    throw new Error(`bookmark.jsのパースに失敗しました: ${message}`);
+  }
 }
 
 // ─── ユーティリティ関数 ──────────────────────────────────────────
+
+/** 正規化されたツイート行（dashboard.ts などで使用） */
+export interface TweetRow {
+  date: string;
+  time: string;
+  text: string;
+  type: TweetType;
+  likes: number;
+  retweets: number;
+  replies: number;
+  source: string;
+  url: string;
+  hasImage: boolean;
+  weekNumber: number;
+}
+
+/** ツイート種別 */
+export type TweetType = 'Original' | 'Reply' | 'Retweet' | 'Quote';
 
 /**
  * tweet.js 特有の "window.YTD.tweet.part0 = [...]" プレフィックスを除去する。

@@ -8,8 +8,7 @@
  * @see https://github.com/ktakahiro150397/gas-tweet-archive
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { parseTweetJs, parseBookmarkJs, chunkArray } from './import';
+import { parseTweetJs, parseBookmarkJs } from './import';
 import { setupDashboardCharts } from './charts';
 
 // ─── 定数 ────────────────────────────────────────────────────────
@@ -106,28 +105,33 @@ export function showAbout(): void {
  * @returns 完了メッセージ
  */
 export function processUploadedFile(fileContent: string, fileName: string): string {
-  const isBookmark = /bookmark/i.test(fileName);
-  const rows = isBookmark
-    ? parseBookmarkJs(fileContent)
-    : parseTweetJs(fileContent);
+  try {
+    const isBookmark = /bookmark/i.test(fileName);
+    const rows = isBookmark
+      ? parseBookmarkJs(fileContent)
+      : parseTweetJs(fileContent);
 
-  if (rows.length === 0) {
-    return '⚠️ 0件のデータが見つかりました。ファイル形式を確認してください。';
+    if (rows.length === 0) {
+      return '⚠️ 0件のデータが見つかりました。ファイル形式を確認してください。';
+    }
+
+    const sheetName = isBookmark ? SHEETS.BOOKMARKS : SHEETS.TWEETS;
+    const headers = isBookmark ? BOOKMARK_HEADERS : TWEET_HEADERS;
+
+    writeRowsToSheet(sheetName, headers, rows);
+    applySheetFormatting(sheetName, isBookmark);
+
+    if (isBookmark) {
+      ensureCategorySheet();
+    }
+
+    refreshDashboard();
+
+    return `✅ 完了！ ${rows.length.toLocaleString()} 件をインポートしました（${fileName}）`;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '不明なエラー';
+    return `❌ インポートに失敗しました: ${message}`;
   }
-
-  const sheetName = isBookmark ? SHEETS.BOOKMARKS : SHEETS.TWEETS;
-  const headers = isBookmark ? BOOKMARK_HEADERS : TWEET_HEADERS;
-
-  writeRowsToSheet(sheetName, headers, rows);
-  applySheetFormatting(sheetName, isBookmark);
-
-  if (isBookmark) {
-    ensureCategorySheet();
-  }
-
-  refreshDashboard();
-
-  return `✅ 完了！ ${rows.length.toLocaleString()} 件をインポートしました（${fileName}）`;
 }
 
 // ─── シート書き込み（バッチ＋プログレス） ────────────────────────
@@ -151,10 +155,7 @@ function writeRowsToSheet(
 
   // 既存データをクリア
   sheet.clear();
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 0) {
-    sheet.getRange(1, 1, lastRow, headers.length).clearContent();
-  }
+  // clearContent() は clear() でカバーされるため削除
 
   const totalRows = rows.length;
 
@@ -347,11 +348,12 @@ export function refreshDashboard(): void {
           const dayName = days[d.getDay()];
           dayCount[dayName] = (dayCount[dayName] || 0) + 1;
 
-          const hour = parseInt(time.split(':')[0], 10);
-          if (!isNaN(hour)) {
-            if (!hourCount[dayName]) hourCount[dayName] = {};
-            hourCount[dayName][hour] = (hourCount[dayName][hour] || 0) + 1;
-          }
+      // 空時刻の場合はスキップ（hourCountから除外）
+      const hour = time ? parseInt(time.split(':')[0], 10) : -1;
+      if (hour >= 0 && hour <= 23) {
+        if (!hourCount[dayName]) hourCount[dayName] = {};
+        hourCount[dayName][hour] = (hourCount[dayName][hour] || 0) + 1;
+      }
         }
 
         topLiked.push({ text: text.slice(0, 80), likes, date });
@@ -384,6 +386,13 @@ export function refreshDashboard(): void {
         cacheEntries.push([`top_liked_${i + 1}_likes`, String(topLiked[i].likes)]);
         cacheEntries.push([`top_liked_${i + 1}_date`, topLiked[i].date]);
       }
+
+      // 時間帯ヒートマップデータ
+      for (const [day, hours] of Object.entries(hourCount)) {
+        for (const [hour, count] of Object.entries(hours)) {
+          cacheEntries.push([`hour_${day}_${hour}`, String(count)]);
+        }
+      }
     }
   }
 
@@ -409,6 +418,12 @@ export function refreshDashboard(): void {
   // _CACHE 書き込み
   if (cacheEntries.length > 0) {
     cacheSheet.getRange(1, 1, cacheEntries.length, 2).setValues(cacheEntries);
+  }
+
+  // _CACHE を非表示（内部的にしか使わないため）
+  if (cacheSheet.isSheetHidden() === false) {
+    ss.moveActiveSheet(ss.getNumSheets()); // 最後尾に移動
+    cacheSheet.hideSheet();
   }
 
   ss.toast(

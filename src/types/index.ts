@@ -1,72 +1,41 @@
 /**
  * X(Twitter) データアーカイブ 型定義
+ *
+ * このファイルは現在使用されていません。
+ * 型定義は src/gas/import.ts に一元化されています。
+ *
+ * @deprecated 代わりに src/gas/import.ts の Tweet, Bookmark 型を使用してください
  */
 
-/** tweet.js の1ツイートデータ構造 */
-export interface Tweet {
-  id_str: string;
-  created_at: string;
-  full_text: string;
-  favorite_count: number;
-  retweet_count: number;
-  reply_count: number;
-  source: string;
-  in_reply_to_screen_name?: string;
-  is_quote_status: boolean;
-  entities?: {
-    media?: Array<{ type: string }>;
-    urls?: Array<{ expanded_url: string }>;
-  };
-}
+export type { Tweet, Bookmark, TweetRow, TweetType } from '../gas/import';
 
-/** bookmark.js の1ブックマークデータ構造 */
-export interface Bookmark {
-  id_str: string;
-  created_at: string;
-  full_text: string;
-  user: {
-    screen_name: string;
-    name: string;
-  };
-  favorite_count: number;
-  retweet_count: number;
-}
-
-/** インポート後の正規化されたツイート行 */
-export interface TweetRow {
-  date: string;
-  time: string;
-  text: string;
-  type: TweetType;
-  likes: number;
-  retweets: number;
-  replies: number;
-  source: string;
-  url: string;
-  hasImage: boolean;
-  weekNumber: number;
-}
-
-/** ツイート種別 */
-export type TweetType = 'Original' | 'Reply' | 'Retweet' | 'Quote';
-
-/** ダッシュボードキャッシュ */
 export interface DashboardCache {
+  /** 総ツイート数 */
   totalTweets: number;
+  /** 総いいね数 */
   totalLikes: number;
+  /** アクティブ期間開始日 */
   activePeriodStart: string;
+  /** アクティブ期間終了日 */
   activePeriodEnd: string;
+  /** 総ブックマーク数 */
   totalBookmarks: number;
+  /** 月次ツイート数 */
   tweetsByMonth: Array<{ month: string; count: number }>;
-  tweetsByType: Record<TweetType, number>;
+  /** ツイート種別構成比 */
+  tweetsByType: Record<string, number>;
+  /** 曜日別ツイート数 */
   tweetsByDayOfWeek: Record<string, number>;
+  /** 時間帯別アクティビティ */
   tweetsByHour: Record<string, Record<number, number>>;
+  /** いいね数TOP10 */
   topLiked: Array<{ text: string; likes: number; date: string }>;
+  /** よく絡んだ人TOP10 */
   topAuthors: Array<{ author: string; count: number }>;
+  /** ブックマークカテゴリ別集計 */
   bookmarkCategories: Array<{ category: string; count: number }>;
 }
 
-/** カテゴリ設定 */
 export interface CategoryConfig {
   name: string;
   color: string;
