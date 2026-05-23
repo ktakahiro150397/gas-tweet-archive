@@ -63,6 +63,28 @@ export interface Bookmark {
  * @returns [日付, 時刻, 本文, 種別, いいね数, RT数, リプ数, 媒体, URL, 画像有無, 週番号] の配列
  * @throws JSONのパースに失敗した場合
  */
+export function importTweets(rawJson: string): string[][] {
+  return parseTweetJs(rawJson);
+}
+
+/**
+ * bookmark.js の内容をパースする。
+ *
+ * @param rawJson - bookmark.js のファイル内容
+ * @returns [保存日, 著者, 内容, いいね数, URL, カテゴリ, 重要度, ステータス, メモ] の配列
+ */
+export function importBookmarks(rawJson: string): string[][] {
+  return parseBookmarkJs(rawJson);
+}
+
+/**
+ * tweet.js の内容をパースし、スプレッドシート書き込み用の
+ * 二次元配列を返す。
+ *
+ * @param rawJson - tweet.js のファイル内容（文字列）
+ * @returns [日付, 時刻, 本文, 種別, いいね数, RT数, リプ数, 媒体, URL, 画像有無, 週番号] の配列
+ * @throws JSONのパースに失敗した場合
+ */
 export function parseTweetJs(rawJson: string): string[][] {
   try {
     const json = extractJson(rawJson);
@@ -212,8 +234,8 @@ export function parseTimestamp(createdAt: string): { dateStr: string; timeStr: s
   }
   const pad = (n: number) => String(n).padStart(2, '0');
   return {
-    dateStr: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    timeStr: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    dateStr: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`,
+    timeStr: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
   };
 }
 

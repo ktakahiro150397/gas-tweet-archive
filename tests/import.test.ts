@@ -5,6 +5,8 @@
 import {
   parseTweetJs,
   parseBookmarkJs,
+  importTweets,
+  importBookmarks,
   extractJson,
   parseTimestamp,
   extractSourceName,
@@ -194,6 +196,62 @@ describe('parseBookmarkJs()', () => {
     const result = parseBookmarkJs(JSON.stringify([noUser]));
     expect(result).toHaveLength(1);
     expect(result[0][1]).toBe('');
+  });
+});
+
+// ─── importTweets ─────────────────────────────────────────────
+
+describe('importTweets()', () => {
+  const mockTweet = {
+    id_str: '123',
+    created_at: 'Wed Mar 15 14:23:05 +0000 2023',
+    full_text: 'これはテストツイートです',
+    favorite_count: 42,
+    retweet_count: 7,
+    reply_count: 2,
+    source: '<a href="http://twitter.com/download/iphone" rel="nofollow">Twitter for iPhone</a>',
+    is_quote_status: false,
+  };
+
+  it('parseTweetJs() のラッパーとして動作する', () => {
+    const result = importTweets(JSON.stringify([mockTweet]));
+    expect(result).toHaveLength(1);
+    expect(result[0][2]).toBe('これはテストツイートです');
+    expect(result[0][3]).toBe('Original');
+  });
+
+  it('window.YTD.part0 ラップを処理する', () => {
+    const wrapped = `window.YTD.tweet.part0 = ${JSON.stringify([mockTweet])}`;
+    const result = importTweets(wrapped);
+    expect(result).toHaveLength(1);
+    expect(result[0][2]).toBe('これはテストツイートです');
+  });
+});
+
+// ─── importBookmarks ───────────────────────────────────────────
+
+describe('importBookmarks()', () => {
+  const mockBookmark = {
+    id_str: '789',
+    created_at: '2023-06-01T10:30:00.000Z',
+    full_text: '保存したツイートです',
+    user: { screen_name: 'testuser', name: 'Test User' },
+    favorite_count: 100,
+    retweet_count: 20,
+  };
+
+  it('parseBookmarkJs() のラッパーとして動作する', () => {
+    const result = importBookmarks(JSON.stringify([mockBookmark]));
+    expect(result).toHaveLength(1);
+    expect(result[0][2]).toBe('保存したツイートです');
+    expect(result[0][1]).toBe('@testuser');
+  });
+
+  it('ネスト構造 { bookmark: {...} } を処理する', () => {
+    const nested = JSON.stringify([{ bookmark: mockBookmark }]);
+    const result = importBookmarks(nested);
+    expect(result).toHaveLength(1);
+    expect(result[0][1]).toBe('@testuser');
   });
 });
 
