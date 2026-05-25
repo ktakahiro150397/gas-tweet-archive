@@ -78,6 +78,10 @@ describe('extractSourceName()', () => {
   it('タグがない場合はそのまま返す', () => {
     expect(extractSourceName('')).toBe('Unknown');
   });
+
+  it('長い文字列は40文字で切り詰める', () => {
+    expect(extractSourceName('x'.repeat(60))).toBe('x'.repeat(40));
+  });
 });
 
 // ─── parseTweetJs ───────────────────────────────────────────────
@@ -154,6 +158,21 @@ describe('parseTweetJs()', () => {
     expect(result).toHaveLength(1);
     expect(result[0][2]).toBe('これはテストツイートです');
   });
+
+  it('retweeted_status がある場合はRT接頭辞がなくてもRetweetになる', () => {
+    const retweetedStatusTweet = {
+      ...mockTweet,
+      id_str: '901',
+      full_text: '通常テキスト',
+      retweeted_status: { id_str: 'child' },
+    };
+    const result = parseTweetJs(JSON.stringify([retweetedStatusTweet]));
+    expect(result[0][3]).toBe('Retweet');
+  });
+
+  it('不正なJSONで説明付きエラーを投げる', () => {
+    expect(() => parseTweetJs('not-json')).toThrow('tweet.jsのパースに失敗しました');
+  });
 });
 
 // ─── parseBookmarkJs ────────────────────────────────────────────
@@ -194,6 +213,23 @@ describe('parseBookmarkJs()', () => {
     const result = parseBookmarkJs(JSON.stringify([noUser]));
     expect(result).toHaveLength(1);
     expect(result[0][1]).toBe('');
+  });
+
+  it('window.YTD.bookmark.part0 ラップを処理する', () => {
+    const wrapped = `window.YTD.bookmark.part0 = ${JSON.stringify([mockBookmark])};`;
+    const result = parseBookmarkJs(wrapped);
+    expect(result).toHaveLength(1);
+    expect(result[0][2]).toBe('保存したツイートです');
+  });
+
+  it('tweet.full_text を本文のフォールバックとして使う', () => {
+    const nestedText = {
+      ...mockBookmark,
+      full_text: undefined,
+      tweet: { full_text: 'tweet配下の本文' },
+    };
+    const result = parseBookmarkJs(JSON.stringify([nestedText]));
+    expect(result[0][2]).toBe('tweet配下の本文');
   });
 });
 
