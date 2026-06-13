@@ -1,6 +1,6 @@
 # GAS 開発環境セットアップ手順
 
-このドキュメントは `glasp`（Google Apps Script CLI）を使って
+このドキュメントは `clasp`（Google Apps Script CLI）を使って
 GAS プロジェクトをデプロイするためのセットアップ手順です。
 
 ## 前提
@@ -30,12 +30,16 @@ clasp login
 
 1. GASエディタのURLから スクリプトID を取得:
    `https://script.google.com/d/___SCRIPT_ID___/edit`
-2. `.clasp.json` の `YOUR_SCRIPT_ID_HERE` を実際のIDに書き換え:
+2. `.clasp.json.example` をコピーして `.clasp.json` を作成し、プレースホルダーを実際のIDに書き換え:
+
+```bash
+cp .clasp.json.example .clasp.json
+```
 
 ```json
 {
   "scriptId": "1ABCDE...",
-  "rootDir": "dist"
+  "rootDir": "./dist"
 }
 ```
 

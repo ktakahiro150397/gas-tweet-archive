@@ -23,13 +23,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript コンパイル
+      - name: Build (TypeScript→GAS)
         run: npm run build
-
-      - name: HTMLファイルを dist/ にコピー
-        run: |
-          cp -r src/pages/*.html dist/ 2>/dev/null || true
-          cp appsscript.json dist/
 
       - name: clasp push
         uses: google/clasp-action@v4
@@ -39,7 +34,7 @@ jobs:
           script_id: ${{ secrets.CLASP_SCRIPT_ID }}
           command: push
 
-      - name: GAS デプロイ（バージョン作成）
+      - name: GAS Deploy (create version)
         uses: google/clasp-action@v4
         with:
           access_token: ${{ secrets.CLASP_ACCESS_TOKEN }}
