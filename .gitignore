@@ -1,7 +1,6 @@
 node_modules/
 dist/
 *.js.map
-.clasp.json
 .clasprc.json
 .DS_Store
 *.log
